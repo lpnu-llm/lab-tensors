@@ -447,10 +447,24 @@ if __name__ == "__main__":
 # \underbrace{C}_{m \times p}
 # $$
 #
-# Внутрішні розміри `n` мають збігатися. Кожен елемент результа — це
+# Внутрішні розміри `n` мають збігатися. Кожен елемент результату — це
 # скалярний добуток рядка `A` і стовпця `B`:
 #
 # $$ C_{ij} = \sum_{k=0}^{n-1} A_{ik}B_{kj} $$
+#
+# Функція `shape` допомагає зрозуміти, чи можна перемножити дві матриці. Якщо:
+#
+# ```python
+# a_shape = shape(A)  # (m, n)
+# b_shape = shape(B)  # (n, p)
+# ```
+#
+# то множення можливе, коли `a_shape[1] == b_shape[0]`. Тобто кількість стовпців
+# першої матриці має дорівнювати кількості рядків другої. Форма результату
+# буде `(a_shape[0], b_shape[1])`, тобто `(m, p)`.
+#
+# Наприклад, `(2, 3) @ (3, 4)` можна обчислити, і результат матиме форму `(2, 4)`.
+# А `(2, 3) @ (2, 4)` обчислити неможливо, бо `3 != 2`.
 #
 # Наприклад:
 #
@@ -471,7 +485,8 @@ if __name__ == "__main__":
 def matmul(a, b):
     """Множить матрицю a форми (m, n) на матрицю b форми (n, p)."""
 
-    # Використайте dot для кожної пари: рядок a та стовпець b.
+    # 1. Знайдіть форми a і b за допомогою shape та перевірте їх.
+    # 2. Використайте dot для кожної пари: рядок a та стовпець b.
     ...
 
 
@@ -687,3 +702,67 @@ def test_linear_batch():
 if __name__ == "__main__":
     test_linear_batch()
     print("✓ linear_batch")
+
+# %% [markdown]
+#
+# ## Порівняння: цикл з `matvec` чи один `matmul`
+#
+# Ми вже знаємо два способи застосувати одні й ті самі ваги до цілого батчу:
+#
+# 1. пройти циклом по вхідних векторах і викликати `matvec(W, x)` для кожного;
+# 2. скласти всі входи у матрицю `X` і один раз викликати `matmul(X, transpose(W))`.
+#
+# Обидва способи мають дати однаковий результат. Функція нижче спочатку це
+# перевіряє, а потім вимірює час обох варіантів.
+#
+# У нашій навчальній реалізації обидві функції всередині використовують цикли Python,
+# тому `matmul` може не виявитися швидшим у цьому експерименті. У PyTorch, NumPy та на GPU
+# матричне множення реалізоване оптимізованими низькорівневими програмами. Вони можуть
+# використати паралелізм апаратного забезпечення, тому один великий `matmul` зазвичай
+# ефективніший за багато малих викликів `matvec`.
+
+# %%
+
+def compare_matvec_and_matmul():
+    """Порівнює час обробки батчу двома способами."""
+    from time import perf_counter
+
+    batch_size = 32
+    input_dim = 64
+    out_dim = 48
+    repeats = 5
+
+    # Створюємо входи та ваги без сторонніх бібліотек.
+    xs = [
+        [(sample + feature) % 10 for feature in range(input_dim)]
+        for sample in range(batch_size)
+    ]
+    weight = [
+        [(output - feature) % 7 for feature in range(input_dim)]
+        for output in range(out_dim)
+    ]
+
+    # Транспонуємо ваги один раз, як це можна зробити перед інференсом.
+    weight_transposed = transpose(weight)
+
+    by_matvec = [matvec(weight, x) for x in xs]
+    by_matmul = matmul(xs, weight_transposed)
+    assert by_matvec == by_matmul
+
+    start = perf_counter()
+    for _ in range(repeats):
+        [matvec(weight, x) for x in xs]
+    matvec_seconds = perf_counter() - start
+
+    start = perf_counter()
+    for _ in range(repeats):
+        matmul(xs, weight_transposed)
+    matmul_seconds = perf_counter() - start
+
+    print(f"Цикл з matvec: {matvec_seconds * 1000:.2f} мс")
+    print(f"Один matmul:    {matmul_seconds * 1000:.2f} мс")
+    print(f"Відношення:     {matvec_seconds / matmul_seconds:.2f}x")
+
+
+if __name__ == "__main__":
+    compare_matvec_and_matmul()
