@@ -53,6 +53,11 @@ def test_vector_add():
         raise AssertionError(
             "Додавання векторів різних довжин має давати помилку")
 
+
+if __name__ == "__main__":
+    test_vector_add()
+    print("✓ vector_add")
+    
 # %%
 
 def dot(a, b):
@@ -78,6 +83,10 @@ def test_dot():
     else:
         raise AssertionError("Добуток векторів різних неможливий")
 
+
+if __name__ == "__main__":
+    test_dot()
+    print("✓ dot")
 
 # %% [markdown]
 #
@@ -164,6 +173,8 @@ def test_dot():
 # де $A_{i,:}$ позначає весь рядок з індексом $i$. Це і є запис словами «для
 # кожного рядка $i$ порахувати `dot` цього рядка з вектором $x$».
 
+# %%
+
 def matvec(mat, vec):
     """Матрично-векторний добуток."""
     
@@ -237,3 +248,8 @@ def test_matvec():
         )
     
     print("Усі перевірки matvec пройдено.")
+
+
+if __name__ == "__main__":
+    test_matvec()
+    print("✓ matvec")
