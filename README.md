@@ -1,16 +1,16 @@
 # Тензори та операції над ними
 
-Цю лабораторну роботу можна виконати як в Jupyter Notebook, так і локально у
-вашому улюбленому редакторі коду.
+Цю лабораторну роботу можна виконати як в [Google Colab](https://colab.research.google.com/drive/1WECpwc0mxl2UFt5josrShSf3T2BGlq1E?usp=sharing),
+так і локально, у вашому улюбленому редакторі коду.
 
 Вашею задачею є додати код в усі місця, позначені `...` так, щоб тести проходили успішно.
 
 
-## Jupyter notebook
+## Google Colab
+
+[Colab](https://colab.research.google.com/drive/1WECpwc0mxl2UFt5josrShSf3T2BGlq1E?usp=sharing)
 
 [Jupyter Notebook](./matmul.ipynb)
-
-Colab: TODO
 
 
 ## Локальна робота
