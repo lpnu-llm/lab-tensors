@@ -766,3 +766,158 @@ def compare_matvec_and_matmul():
 
 if __name__ == "__main__":
     compare_matvec_and_matmul()
+
+# %% [markdown]
+#
+# ## Порівняння з PyTorch: Python, CPU та GPU
+#
+# Наша функція `matmul` допомогла зрозуміти матричне множення, але вона
+# виконує мільйони операцій у циклах Python. PyTorch передає цю роботу
+# оптимізованим програмам для CPU або GPU.
+#
+# Остання комірка порівнює:
+#
+# - наш `matmul` на Python;
+# - `torch.matmul` на CPU;
+# - `torch.matmul` на NVIDIA GPU через CUDA або на Apple GPU через MPS.
+#
+# Для маленьких матриць GPU може не бути швидшим за CPU. Запуск операції на GPU
+# має власні накладні витрати, і GPu розрахований на сотні-тисячі маленьких операцій одночасно.
+# Але маленькі матриці, такі як 3*3, не можуть в собі мати таку кількість обчислень, що робить GPU
+# нерелевантним. На великих матрицях паралелізм GPU зазвичай дає значну перевагу.
+#
+# Ми створюємо тензори на потрібному пристрої **до** початку вимірювання. Так ми
+# вимірюємо час обчислення, а не копіювання даних між CPU і GPU. У реальній програмі
+# це копіювання теж може впливати на загальний час.
+
+# %%
+
+def compare_with_torch():
+    """Порівнює навчальний matmul з PyTorch на CPU та GPU."""
+    from time import perf_counter
+
+    try:
+        import torch
+    except ImportError:
+        print("PyTorch не встановлено. Встановіть його, щоб запусти цей бенчмарк.")
+        return
+
+    def synchronize(device):
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        elif device.type == "mps":
+            torch.mps.synchronize()
+
+    def measure_torch(a, b, repeats):
+        # Перші запуски можуть мати додаткові витрати на підготовку.
+        for _ in range(3):
+            torch.matmul(a, b)
+        synchronize(a.device)
+
+        start = perf_counter()
+        for _ in range(repeats):
+            torch.matmul(a, b)
+        synchronize(a.device)
+        return (perf_counter() - start) / repeats
+
+    def make_python_matrix(size, offset):
+        return [
+            [float((row + column + offset) % 7) for column in range(size)]
+            for row in range(size)
+        ]
+
+    def benchmark_size(size, python_repeats, torch_repeats):
+        a = make_python_matrix(size, 0)
+        b = make_python_matrix(size, 1)
+
+        start = perf_counter()
+        python_result = None
+        for _ in range(python_repeats):
+            python_result = matmul(a, b)
+        python_time = (perf_counter() - start) / python_repeats
+
+        a_cpu = torch.tensor(a, dtype=torch.float32)
+        b_cpu = torch.tensor(b, dtype=torch.float32)
+        cpu_time = measure_torch(a_cpu, b_cpu, torch_repeats)
+
+        # Перевіряємо, що оптимізована функція дає той самий результат.
+        expected = torch.tensor(python_result, dtype=torch.float32)
+        assert torch.allclose(torch.matmul(a_cpu, b_cpu), expected)
+
+        return python_time, cpu_time, a_cpu, b_cpu
+
+    if torch.cuda.is_available():
+        gpu_device = torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        gpu_device = torch.device("mps")
+    else:
+        gpu_device = None
+
+    print(f"PyTorch {torch.__version__}")
+    print("\nНаш matmul і PyTorch CPU:")
+    print(f"{'size':>10} {'Python':>14} {'PyTorch CPU':>14} {'CPU speedup':>14}")
+
+    # 16x16 — мала матриця; 128x128 — вже мільйони Python-операцій.
+    small = benchmark_size(16, python_repeats=20, torch_repeats=200)
+    large = benchmark_size(128, python_repeats=1, torch_repeats=30)
+
+    for size, result in ((16, small), (128, large)):
+        python_time, cpu_time, _, _ = result
+        print(
+            f"{f'{size}x{size}':>10} "
+            f"{python_time * 1000:>11.3f} мс "
+            f"{cpu_time * 1000:>11.3f} мс "
+            f"{python_time / cpu_time:>13.1f}x"
+        )
+
+    if gpu_device is None:
+        print("\nCUDA або MPS недоступні: GPU-бенчмарк пропущено.")
+        return
+
+    print(f"\nPyTorch CPU і {gpu_device.type.upper()} GPU:")
+    print(f"{'size':>10} {'PyTorch CPU':>14} {gpu_device.type.upper() + ' GPU':>14} {'GPU speedup':>14}")
+
+    # Малі матриці з попереднього бенчмарку.
+    _, small_cpu_time, small_a_cpu, small_b_cpu = small
+    small_a_gpu = small_a_cpu.to(gpu_device)
+    small_b_gpu = small_b_cpu.to(gpu_device)
+    small_gpu_time = measure_torch(small_a_gpu, small_b_gpu, repeats=200)
+    print(
+        f"{'16x16':>10} "
+        f"{small_cpu_time * 1000:>11.3f} мс "
+        f"{small_gpu_time * 1000:>11.3f} мс "
+        f"{small_cpu_time / small_gpu_time:>13.2f}x"
+    )
+
+    # Більші матриці, які ми також запускали через наш Python matmul.
+    _, large_cpu_time, large_a_cpu, large_b_cpu = large
+    large_a_gpu = large_a_cpu.to(gpu_device)
+    large_b_gpu = large_b_cpu.to(gpu_device)
+    large_gpu_time = measure_torch(large_a_gpu, large_b_gpu, repeats=30)
+    print(
+        f"{'128x128':>10} "
+        f"{large_cpu_time * 1000:>11.3f} мс "
+        f"{large_gpu_time * 1000:>11.3f} мс "
+        f"{large_cpu_time / large_gpu_time:>13.2f}x"
+    )
+
+    # Дуже великий розмір запускаємо лише в PyTorch: цикли Python були б надто повільними.
+    huge_size = 1024
+    huge_a_cpu = torch.randn(huge_size, huge_size)
+    huge_b_cpu = torch.randn(huge_size, huge_size)
+    huge_cpu_time = measure_torch(huge_a_cpu, huge_b_cpu, repeats=10)
+    huge_a_gpu = huge_a_cpu.to(gpu_device)
+    huge_b_gpu = huge_b_cpu.to(gpu_device)
+    huge_gpu_time = measure_torch(huge_a_gpu, huge_b_gpu, repeats=10)
+    print(
+        f"{'1024x1024':>10} "
+        f"{huge_cpu_time * 1000:>11.3f} мс "
+        f"{huge_gpu_time * 1000:>11.3f} мс "
+        f"{huge_cpu_time / huge_gpu_time:>13.2f}x"
+    )
+
+    print("\nЗначення можуть відрізнятися залежно від комп'ютера та його поточного навантаження.")
+
+
+if __name__ == "__main__":
+    compare_with_torch()
