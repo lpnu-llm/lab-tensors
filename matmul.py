@@ -354,9 +354,9 @@ if __name__ == "__main__":
 # розмір вектора:
 #
 # $$
-# \underbrace{x}_{\text{input\_dim}}
+# \underbrace{x}_{\text{input_dim}}
 # \quad\longrightarrow\quad
-# \underbrace{y}_{\text{out\_dim}}
+# \underbrace{y}_{\text{out_dim}}
 # $$
 #
 # Наприклад, шар з `input_dim = 2` і `out_dim = 3` збільшує вектор
